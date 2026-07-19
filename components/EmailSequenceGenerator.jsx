@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { INDUSTRIES, TONES, generateSequence } from "../lib/emailTemplates";
+import { INDUSTRIES, TONES } from "../lib/emailTemplates";
 
 function EmailCard({ email }) {
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
@@ -58,12 +58,32 @@ export default function EmailSequenceGenerator() {
   const [industry, setIndustry] = useState(INDUSTRIES[0]);
   const [tone, setTone] = useState(TONES[0]);
   const [sequence, setSequence] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [genKey, setGenKey] = useState(0); // reset EmailCard save state per generation
 
-  function handleGenerate(e) {
+  async function handleGenerate(e) {
     e.preventDefault();
-    setSequence(generateSequence(industry, tone));
-    setGenKey((k) => k + 1);
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/generate-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ industry, tone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong.");
+        return;
+      }
+      setSequence(data.sequence);
+      setGenKey((k) => k + 1);
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const selectClass = "input-dark mt-1 bg-ink-800";
@@ -107,11 +127,13 @@ export default function EmailSequenceGenerator() {
             </select>
           </div>
         </div>
+        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
         <button
           type="submit"
+          disabled={loading}
           className="btn-gold mt-5"
         >
-          Generate Sequence
+          {loading ? "Generating…" : "Generate Sequence"}
         </button>
       </form>
 

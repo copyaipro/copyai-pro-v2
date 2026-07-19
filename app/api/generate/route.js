@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "../../../lib/supabase/server";
+import { groqChat, groqConfigured } from "../../../lib/groq";
 
-// MOCK: canned headline templates instead of an OpenAI call.
-// TODO: restore the chat-completions request when the real backend lands.
+// Fallback: canned headline templates, used when Groq is unavailable.
 const TEMPLATES = [
   (t) => `The ${t} Playbook Your Competitors Hope You Never Read`,
   (t) => `Why Most Advice About ${t} Quietly Fails Freelancers`,
@@ -16,8 +16,7 @@ const TEMPLATES = [
   (t) => `Proof That Better ${t} Wins More Projects`,
 ];
 
-// Pull a short subject line out of the brief for the templates.
-// Handles "Client: Name" / "Brand: Name" style briefs; falls back to first words.
+// Pull a short subject line out of the brief for the fallback templates.
 function subjectFromBrief(brief) {
   const labeled = brief.match(/(?:client|brand|company|product)\s*:\s*([^\n.,;]+?)(?=\s*(?:background|brief|goal|about)\s*:|[\n.,;]|$)/i);
   const raw = labeled ? labeled[1] : brief;
@@ -28,6 +27,32 @@ function subjectFromBrief(brief) {
     .slice(0, 4)
     .join(" ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function fallbackHeadlines(brief) {
+  const subject = subjectFromBrief(brief);
+  return TEMPLATES.map((fn) => fn(subject));
+}
+
+async function groqHeadlines(brief) {
+  const content = await groqChat(
+    [
+      {
+        role: "system",
+        content:
+          'You are an expert direct-response copywriter. Given a client brief, write exactly 10 distinct, punchy marketing headlines. Mix angles: direct benefit, curiosity, social proof, urgency, contrarian. No numbering, no quotes, no explanations. Respond ONLY with JSON: {"headlines": ["...", ...]}',
+      },
+      { role: "user", content: `Client brief:\n${brief}` },
+    ],
+    { json: true, maxTokens: 800 }
+  );
+
+  const parsed = JSON.parse(content);
+  const headlines = (parsed.headlines ?? [])
+    .filter((h) => typeof h === "string" && h.trim())
+    .slice(0, 10);
+  if (headlines.length === 0) throw new Error("Groq returned no headlines");
+  return headlines;
 }
 
 export async function POST(request) {
@@ -48,10 +73,20 @@ export async function POST(request) {
     );
   }
 
-  // Mimic real API latency so loading states get exercised.
-  await new Promise((r) => setTimeout(r, 800));
-  const subject = subjectFromBrief(brief);
-  const headlines = TEMPLATES.map((fn) => fn(subject));
+  let headlines;
+  let source = "groq";
+  if (groqConfigured()) {
+    try {
+      headlines = await groqHeadlines(brief.trim());
+    } catch (err) {
+      console.error("Groq headline generation failed, using fallback:", err.message);
+      headlines = fallbackHeadlines(brief);
+      source = "fallback";
+    }
+  } else {
+    headlines = fallbackHeadlines(brief);
+    source = "fallback";
+  }
 
   const rows = headlines.map((text) => ({
     user_id: user.id,
@@ -64,5 +99,5 @@ export async function POST(request) {
     // Headlines were generated — return them even if saving failed.
   }
 
-  return NextResponse.json({ headlines });
+  return NextResponse.json({ headlines, source });
 }

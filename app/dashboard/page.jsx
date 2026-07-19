@@ -2,17 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../lib/supabase/server";
 import { getSwipes } from "../../lib/mockDb";
+import { resolveTier } from "../../lib/tier";
 import AppShell from "../../components/AppShell";
+import UpgradeButton from "../../components/UpgradeButton";
 
 export const metadata = { title: "Dashboard — CopyAI Pro" };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }) {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+
+  const tierInfo = resolveTier(user);
+  const upgraded = searchParams?.upgraded === "1";
 
   const { data: headlines } = await supabase
     .from("headlines")
@@ -52,6 +57,28 @@ export default async function DashboardPage() {
 
   return (
     <AppShell email={user.email} active="dashboard" title="Dashboard">
+      {upgraded && (
+        <div className="mb-6 rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-3 text-sm font-medium text-green-400">
+          Welcome to Pro! 🎉 Your subscription is active — everything is unlimited.
+        </div>
+      )}
+
+      {/* Plan / billing */}
+      <div className="card mb-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Current plan
+          </p>
+          <p className="mt-1 text-lg font-semibold text-gold-500">{tierInfo.label}</p>
+          {tierInfo.headlinesLimit !== null && (
+            <p className="mt-1 text-sm text-neutral-400">
+              {tierInfo.headlinesUsed}/{tierInfo.headlinesLimit} headlines used this month
+            </p>
+          )}
+        </div>
+        {tierInfo.tier === "free" && <UpgradeButton />}
+      </div>
+
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2">
         {stats.map((s) => (
