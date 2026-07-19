@@ -1,4 +1,5 @@
 -- Run this in the Supabase SQL editor (Dashboard → SQL Editor).
+-- Idempotent: safe to run multiple times.
 
 -- === headlines ===========================================================
 create table if not exists public.headlines (
@@ -11,10 +12,12 @@ create table if not exists public.headlines (
 
 alter table public.headlines enable row level security;
 
+drop policy if exists "Users can read own headlines" on public.headlines;
 create policy "Users can read own headlines"
   on public.headlines for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own headlines" on public.headlines;
 create policy "Users can insert own headlines"
   on public.headlines for insert
   with check (auth.uid() = user_id);
@@ -34,14 +37,17 @@ create table if not exists public.swipes (
 
 alter table public.swipes enable row level security;
 
+drop policy if exists "Users can read own swipes" on public.swipes;
 create policy "Users can read own swipes"
   on public.swipes for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own swipes" on public.swipes;
 create policy "Users can insert own swipes"
   on public.swipes for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can delete own swipes" on public.swipes;
 create policy "Users can delete own swipes"
   on public.swipes for delete
   using (auth.uid() = user_id);
@@ -62,6 +68,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
   on public.profiles for select
   using (auth.uid() = id);
@@ -87,3 +94,9 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Backfill: create profile rows for any users who signed up before
+-- this trigger existed.
+insert into public.profiles (id, email)
+select id, email from auth.users
+on conflict (id) do nothing;
