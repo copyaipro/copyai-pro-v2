@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "../../../lib/supabase/server";
-import { getSwipes, insertSwipe } from "../../../lib/mockDb";
+import { listSwipes, saveSwipe } from "../../../lib/data";
 
-// MOCK: reads from the in-memory swipe store instead of Supabase.
 export async function GET() {
   const supabase = createClient();
   const {
@@ -13,10 +12,9 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  return NextResponse.json({ swipes: getSwipes(user.id) });
+  return NextResponse.json({ swipes: await listSwipes(supabase, user) });
 }
 
-// MOCK: saves to the in-memory swipe store instead of Supabase.
 export async function POST(request) {
   const supabase = createClient();
   const {
@@ -32,12 +30,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
   }
 
-  const swipe = insertSwipe({
-    user_id: user.id,
-    type: type || "email",
-    title: title || "Untitled",
-    content,
-  });
-
-  return NextResponse.json({ swipe });
+  try {
+    const swipe = await saveSwipe(supabase, user, { type, title, content });
+    return NextResponse.json({ swipe });
+  } catch (err) {
+    console.error("saveSwipe error:", err.message);
+    return NextResponse.json({ error: "Could not save swipe." }, { status: 500 });
+  }
 }

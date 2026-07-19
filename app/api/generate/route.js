@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "../../../lib/supabase/server";
 import { groqChat, groqConfigured } from "../../../lib/groq";
+import { resolveTierFor, FREE_HEADLINES_PER_MONTH } from "../../../lib/data";
 
 // Fallback: canned headline templates, used when Groq is unavailable.
 const TEMPLATES = [
@@ -70,6 +71,18 @@ export async function POST(request) {
     return NextResponse.json(
       { error: "Please provide a brief of at least 10 characters." },
       { status: 400 }
+    );
+  }
+
+  // Enforce the free-tier monthly limit (10 generated headlines ≈ 1 batch).
+  const tierInfo = await resolveTierFor(supabase, user);
+  if (!tierInfo.unlimited && tierInfo.headlinesUsed >= FREE_HEADLINES_PER_MONTH) {
+    return NextResponse.json(
+      {
+        error: `Free tier limit reached (${FREE_HEADLINES_PER_MONTH} headlines/month). Upgrade to Pro for unlimited generations.`,
+        upgrade: true,
+      },
+      { status: 402 }
     );
   }
 

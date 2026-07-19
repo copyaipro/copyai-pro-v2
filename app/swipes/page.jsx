@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../lib/supabase/server";
-import { getSwipes } from "../../lib/mockDb";
+import { listSwipes } from "../../lib/data";
 import AppShell from "../../components/AppShell";
 
 export const metadata = { title: "Swipe File — CopyAI Pro" };
@@ -16,9 +16,7 @@ export default async function SwipesPage() {
 
   if (!user) redirect("/login");
 
-  const swipes = getSwipes(user.id).sort(
-    (a, b) => new Date(b.created_at) - new Date(a.created_at)
-  );
+  const swipes = await listSwipes(supabase, user);
 
   return (
     <AppShell email={user.email} active="swipes" title="Swipe File">

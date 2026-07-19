@@ -20,7 +20,7 @@ export default function AuthForm({ mode }) {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = isSignup
+    const { data, error } = isSignup
       ? await supabase.auth.signUp({ email, password })
       : await supabase.auth.signInWithPassword({ email, password });
 
@@ -29,7 +29,12 @@ export default function AuthForm({ mode }) {
       setError(error.message);
       return;
     }
-    // Mock auth signs in immediately on signup — no confirmation email.
+    // Real Supabase signup with email confirmation enabled returns a user
+    // but no session — tell the user to check their inbox.
+    if (isSignup && data?.user && !data.session) {
+      setMessage("Check your email for a confirmation link to finish signing up.");
+      return;
+    }
     router.push("/dashboard");
     router.refresh();
   }

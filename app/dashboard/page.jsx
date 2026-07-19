@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../lib/supabase/server";
-import { getSwipes } from "../../lib/mockDb";
-import { resolveTier } from "../../lib/tier";
+import { listSwipes, resolveTierFor } from "../../lib/data";
 import AppShell from "../../components/AppShell";
 import UpgradeButton from "../../components/UpgradeButton";
 
@@ -16,7 +15,7 @@ export default async function DashboardPage({ searchParams }) {
 
   if (!user) redirect("/login");
 
-  const tierInfo = resolveTier(user);
+  const tierInfo = await resolveTierFor(supabase, user);
   const upgraded = searchParams?.upgraded === "1";
 
   const { data: headlines } = await supabase
@@ -25,7 +24,7 @@ export default async function DashboardPage({ searchParams }) {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const swipes = getSwipes(user.id);
+  const swipes = await listSwipes(supabase, user);
 
   const stats = [
     { label: "Headlines generated", value: (headlines ?? []).length, href: "/headlines" },
